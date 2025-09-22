@@ -1,0 +1,12 @@
+{
+    "admin": {
+        "password": "admin12",
+        "name": "Administrator",
+        "role": "admin"
+    },
+    "dhawani": {
+        "password": "mam123",
+        "name": "deco",
+        "role": "teacher"
+    }
+}

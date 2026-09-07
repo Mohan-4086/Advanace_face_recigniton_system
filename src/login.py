@@ -1,18 +1,11 @@
+# Modified: repository cleanup and reliability fixes, September 2026.
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
 import json
 import os
 from PIL import Image, ImageTk
-
-def ensure_directories():
-    directories = [
-        os.path.join("src", "assets"),
-        "assets",
-        "dataset",
-        "attendance"
-    ]
-    for directory in directories:
-        os.makedirs(directory, exist_ok=True)
+from config import LOGIN_FILE, ASSETS_DIR, init
+from auth import hash_password, verify_password
 
 class LoginSystem:
     def __init__(self):
@@ -21,7 +14,7 @@ class LoginSystem:
         self.window.geometry("400x600")
         self.window.resizable(False, False)
         
-        ensure_directories()
+        init()
         
         # Center window
         screen_width = self.window.winfo_screenwidth()
@@ -34,30 +27,29 @@ class LoginSystem:
         self.setup_gui()
 
     def initialize_users(self):
-        try:
-            if not os.path.exists('users.json'):
-                default_users = {
-                    "admin": {
-                        "password": "admin123",
-                        "name": "Administrator",
-                        "role": "admin"
-                    },
-                    "teacher1": {
-                        "password": "teacher123",
-                        "name": "Teacher 1",
-                        "role": "teacher"
-                    }
-                }
-                with open('users.json', 'w') as f:
-                    json.dump(default_users, f, indent=4)
-                print("Created new users.json with default users")
-            else:
-                with open('users.json', 'r') as f:
-                    users = json.load(f)
-                print("Loaded existing users.json successfully")
-        except Exception as e:
-            print(f"Error with users.json: {e}")
-            messagebox.showerror("Error", "Failed to initialize user database")
+        if os.path.exists(LOGIN_FILE):
+            with open(LOGIN_FILE, encoding="utf-8") as file:
+                users = json.load(file)
+            # Upgrade local legacy plaintext credentials without changing passwords.
+            changed = False
+            for user in users.values():
+                if not user["password"].startswith("pbkdf2_sha256$"):
+                    user["password"] = hash_password(user["password"])
+                    changed = True
+            if changed:
+                with open(LOGIN_FILE, "w", encoding="utf-8") as file:
+                    json.dump(users, file, indent=4)
+            return
+        password = simpledialog.askstring(
+            "First-time setup", "Choose a password for the admin account:",
+            show="*", parent=self.window)
+        if not password:
+            self.window.destroy()
+            raise SystemExit("Administrator setup cancelled")
+        users = {"admin": {"password": hash_password(password),
+                           "name": "Administrator", "role": "admin"}}
+        with open(LOGIN_FILE, "x", encoding="utf-8") as file:
+            json.dump(users, file, indent=4)
 
     def setup_gui(self):
         # Main Frame
@@ -66,11 +58,7 @@ class LoginSystem:
 
         # Try to load logo
         try:
-            logo_paths = [
-                os.path.join("src", "assets", "logo.png"),
-                os.path.join("assets", "logo.png"),
-                "logo.png"
-            ]
+            logo_paths = [os.path.join(ASSETS_DIR, "logo.png")]
             
             logo_loaded = False
             for logo_path in logo_paths:
@@ -133,17 +121,17 @@ class LoginSystem:
 
     def login(self):
         username = self.username_var.get().strip()
-        password = self.password_var.get().strip()
+        password = self.password_var.get()
 
         if not username or not password:
             self.status_var.set("Please enter both username and password")
             return
 
         try:
-            with open('users.json', 'r') as f:
+            with open(LOGIN_FILE, 'r', encoding='utf-8') as f:
                 users = json.load(f)
 
-            if username in users and users[username]["password"] == password:
+            if username in users and verify_password(password, users[username]["password"]):
                 print(f"Successful login: {username}")
                 self.status_var.set("Login successful!")
                 self.status_label.configure(foreground='green')
@@ -255,14 +243,14 @@ class AdminPanel:
         def save_teacher():
             username = username_var.get().strip()
             name = name_var.get().strip()
-            password = password_var.get().strip()
+            password = password_var.get()
 
             if not all([username, name, password]):
                 messagebox.showerror("Error", "All fields are required", parent=dialog)
                 return
 
             try:
-                with open('users.json', 'r') as f:
+                with open(LOGIN_FILE, 'r', encoding='utf-8') as f:
                     users = json.load(f)
 
                 if username in users:
@@ -270,12 +258,12 @@ class AdminPanel:
                     return
 
                 users[username] = {
-                    "password": password,
+                    "password": hash_password(password),
                     "name": name,
                     "role": "teacher"
                 }
 
-                with open('users.json', 'w') as f:
+                with open(LOGIN_FILE, 'w', encoding='utf-8') as f:
                     json.dump(users, f, indent=4)
 
                 messagebox.showinfo("Success", "Teacher added successfully", parent=dialog)
@@ -307,7 +295,7 @@ class AdminPanel:
             for item in tree.get_children():
                 tree.delete(item)
 
-            with open('users.json', 'r') as f:
+            with open(LOGIN_FILE, 'r', encoding='utf-8') as f:
                 users = json.load(f)
 
             for username, data in users.items():
@@ -333,18 +321,18 @@ class AdminPanel:
             ttk.Entry(reset_dialog, textvariable=password_var, show="*").pack(pady=5)
 
             def save_password():
-                new_password = password_var.get().strip()
+                new_password = password_var.get()
                 if not new_password:
                     messagebox.showerror("Error", "Password cannot be empty", parent=reset_dialog)
                     return
 
                 try:
-                    with open('users.json', 'r') as f:
+                    with open(LOGIN_FILE, 'r', encoding='utf-8') as f:
                         users = json.load(f)
 
-                    users[username]["password"] = new_password
+                    users[username]["password"] = hash_password(new_password)
 
-                    with open('users.json', 'w') as f:
+                    with open(LOGIN_FILE, 'w', encoding='utf-8') as f:
                         json.dump(users, f, indent=4)
 
                     messagebox.showinfo("Success", "Password reset successfully", parent=reset_dialog)
@@ -365,12 +353,12 @@ class AdminPanel:
             
             if messagebox.askyesno("Confirm", f"Delete teacher {username}?", parent=dialog):
                 try:
-                    with open('users.json', 'r') as f:
+                    with open(LOGIN_FILE, 'r', encoding='utf-8') as f:
                         users = json.load(f)
 
                     del users[username]
 
-                    with open('users.json', 'w') as f:
+                    with open(LOGIN_FILE, 'w', encoding='utf-8') as f:
                         json.dump(users, f, indent=4)
 
                     load_teachers()
@@ -410,9 +398,9 @@ class AdminPanel:
         ttk.Entry(dialog, textvariable=confirm_pass_var, show="*").pack(pady=5)
 
         def save_password():
-            current_pass = current_pass_var.get().strip()
-            new_pass = new_pass_var.get().strip()
-            confirm_pass = confirm_pass_var.get().strip()
+            current_pass = current_pass_var.get()
+            new_pass = new_pass_var.get()
+            confirm_pass = confirm_pass_var.get()
 
             if not all([current_pass, new_pass, confirm_pass]):
                 messagebox.showerror("Error", "All fields are required", parent=dialog)
@@ -423,16 +411,16 @@ class AdminPanel:
                 return
 
             try:
-                with open('users.json', 'r') as f:
+                with open(LOGIN_FILE, 'r', encoding='utf-8') as f:
                     users = json.load(f)
 
-                if users[self.admin_username]["password"] != current_pass:
+                if not verify_password(current_pass, users[self.admin_username]["password"]):
                     messagebox.showerror("Error", "Current password is incorrect", parent=dialog)
                     return
 
-                users[self.admin_username]["password"] = new_pass
+                users[self.admin_username]["password"] = hash_password(new_pass)
 
-                with open('users.json', 'w') as f:
+                with open(LOGIN_FILE, 'w', encoding='utf-8') as f:
                     json.dump(users, f, indent=4)
 
                 messagebox.showinfo("Success", "Password changed successfully", parent=dialog)
@@ -445,7 +433,7 @@ class AdminPanel:
 
     def start_main_app(self):
         try:
-            with open('users.json', 'r') as f:
+            with open(LOGIN_FILE, 'r', encoding='utf-8') as f:
                 users = json.load(f)
             teacher_name = users[self.admin_username]["name"]
             

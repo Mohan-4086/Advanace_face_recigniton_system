@@ -1,3 +1,4 @@
+# Modified: repository cleanup and reliability fixes, September 2026.
 # main.py
 import tkinter as tk
 from tkinter import ttk
@@ -8,6 +9,7 @@ import time
 import sys
 
 # Your modules (make sure these import without errors)
+from config import ASSETS_DIR
 from student import add_student
 from manage_students import manage_students
 from attendance import view_attendance as show_attendance
@@ -21,7 +23,7 @@ class MainApp:
         # -----------------------
         # Config
         # -----------------------
-        self.ASSETS = r"C:\Users\MOHAN\Desktop\Advance_face_recognition\src\assets"
+        self.ASSETS = ASSETS_DIR
         self.WIN_W, self.WIN_H = 900, 600
 
         # Create root
@@ -97,7 +99,7 @@ class MainApp:
         buttons = [
             ("➕  Add Student", lambda: add_student(self.root, self.username), {"use_main_thread": True}),
             ("🧑‍🎓  Manage Students", lambda: manage_students(self.root, self.username), {"use_main_thread": True}),
-            ("📷  Start Recognition", lambda: start_recognition(self.root, self.username), {"start_thread": True, "thread_daemon": True}),
+            ("📷  Start Recognition", lambda: start_recognition(self.root, self.username), {"use_main_thread": True}),
             ("📑  Show Attendance", lambda: show_attendance(self.root, self.username), {"use_main_thread": True}),
             ("❌  Logout", self.logout, {})
         ]

@@ -1,3 +1,4 @@
+# Modified: repository cleanup and reliability fixes, September 2026.
 import os
 import cv2
 
@@ -34,20 +35,6 @@ BTN_H = 2
 
 # Login settings
 LOGIN_FILE = os.path.join(BASE_DIR, "users.json")
-
-# Default users (will be created if users.json doesn't exist)
-DEFAULT_USERS = {
-    "admin": {
-        "password": "admin123",
-        "name": "Administrator",
-        "role": "admin"
-    },
-    "teacher1": {
-        "password": "teacher123",
-        "name": "Teacher 1",
-        "role": "teacher"
-    }
-}
 
 # Attendance settings
 ATTENDANCE_COLUMNS = ["Name", "Time", "Teacher", "Status"]
@@ -116,12 +103,6 @@ def init():
     # Create required directories
     for dir_path in [DATASET_DIR, ATTENDANCE_DIR, LOGS_DIR, ASSETS_DIR]:
         os.makedirs(dir_path, exist_ok=True)
-
-    # Create default users file if it doesn't exist
-    if not os.path.exists(LOGIN_FILE):
-        import json
-        with open(LOGIN_FILE, 'w') as f:
-            json.dump(DEFAULT_USERS, f, indent=4)
 
     # Verify Haar cascade file
     if not os.path.exists(HAAR_PATH):

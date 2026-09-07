@@ -1,5 +1,10 @@
+# Modified: repository cleanup and reliability fixes, September 2026.
 import os, re, cv2, datetime
+import json
+import shutil
+import uuid
 from tkinter import simpledialog, messagebox
+from student_metadata import read_student
 from config import DATASET_DIR, PHOTO_SIZE, DEFAULT_PHOTOS, HAAR_PATH
 
 face_cascade = cv2.CascadeClassifier(HAAR_PATH)
@@ -22,7 +27,11 @@ def add_student(parent=None, teacher=None):
     # Check if student already exists
     existing_students = os.listdir(DATASET_DIR)
     for student in existing_students:
-        if student.startswith(name + "_") or student == name:
+        folder = os.path.join(DATASET_DIR, student)
+        if not os.path.isdir(folder):
+            continue
+        info = read_student(folder)
+        if info["name"].casefold() == raw_name.strip().casefold() and info["teacher"] == (teacher or "Unknown"):
             if not messagebox.askyesno("Warning", 
                                      f"Student '{name}' already exists. Add another entry?",
                                      parent=parent):
@@ -38,13 +47,12 @@ def add_student(parent=None, teacher=None):
         return
 
     # Create directory for new student
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    if teacher:
-        person_dir = os.path.join(DATASET_DIR, f"{name}_{teacher}_{timestamp}")
-    else:
-        person_dir = os.path.join(DATASET_DIR, f"{name}_{timestamp}")
+    timestamp = datetime.datetime.now().isoformat(timespec="seconds")
+    person_dir = os.path.join(DATASET_DIR, uuid.uuid4().hex)
     
-    os.makedirs(person_dir, exist_ok=True)
+    os.makedirs(person_dir, exist_ok=False)
+    with open(os.path.join(person_dir, "student.json"), "w", encoding="utf-8") as file:
+        json.dump({"name": raw_name.strip(), "teacher": teacher or "Unknown", "created": timestamp}, file)
 
     # Start photo capture
     if capture_photos(person_dir, num_photos, parent):
@@ -54,7 +62,7 @@ def add_student(parent=None, teacher=None):
     else:
         # Cleanup if failed
         try:
-            os.rmdir(person_dir)
+            shutil.rmtree(person_dir)
         except:
             pass
 
@@ -67,69 +75,71 @@ def capture_photos(person_dir, num_photos, parent=None):
 
     photos_taken = 0
     
-    # Create window
-    cv2.namedWindow("Capture Photos", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("Capture Photos", 800, 600)
+    try:
+        # Create window
+        cv2.namedWindow("Capture Photos", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Capture Photos", 800, 600)
+    
+        while photos_taken < num_photos:
+            ret, frame = cap.read()
+            if not ret:
+                messagebox.showerror("Camera Error", "Camera stopped providing frames.", parent=parent)
+                break
+    
+            # Create copy for display
+            display_frame = frame.copy()
+            
+            # Detect faces
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+    
+            # Process detected faces
+            for (x, y, w, h) in (faces if len(faces) == 1 else []):
+                # Draw rectangle around face
+                cv2.rectangle(display_frame, (x,y), (x+w,y+h), (0,255,0), 2)
+    
+                # Save face image
+                face = gray[y:y+h, x:x+w]
+                try:
+                    face = cv2.resize(face, PHOTO_SIZE)
+                    filename = os.path.join(person_dir, f"photo_{photos_taken+1}.jpg")
+                    if cv2.imwrite(filename, face):
+                        photos_taken += 1
+                except Exception as e:
+                    print(f"Error saving photo: {e}")
+                    continue
+    
+            # Show progress
+            cv2.putText(display_frame, 
+                        f"Photos: {photos_taken}/{num_photos}", 
+                        (10, 30), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 
+                        1, 
+                        (0, 255, 0), 
+                        2)
+            
+            # Show instructions
+            cv2.putText(display_frame,
+                        "Press 'q' to quit", 
+                        (10, 60), 
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        1,
+                        (0, 255, 0),
+                        2)
+    
+            # Show frame
+            cv2.imshow("Capture Photos", display_frame)
+    
+            # Check for quit
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+    
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
 
-    while photos_taken < num_photos:
-        ret, frame = cap.read()
-        if not ret:
-            continue
-
-        # Create copy for display
-        display_frame = frame.copy()
-        
-        # Detect faces
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-
-        # Process detected faces
-        for (x, y, w, h) in faces:
-            # Draw rectangle around face
-            cv2.rectangle(display_frame, (x,y), (x+w,y+h), (0,255,0), 2)
-
-            # Save face image
-            face = gray[y:y+h, x:x+w]
-            try:
-                face = cv2.resize(face, PHOTO_SIZE)
-                filename = os.path.join(person_dir, f"photo_{photos_taken+1}.jpg")
-                cv2.imwrite(filename, face)
-                photos_taken += 1
-            except Exception as e:
-                print(f"Error saving photo: {e}")
-                continue
-
-        # Show progress
-        cv2.putText(display_frame, 
-                    f"Photos: {photos_taken}/{num_photos}", 
-                    (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 
-                    1, 
-                    (0, 255, 0), 
-                    2)
-        
-        # Show instructions
-        cv2.putText(display_frame,
-                    "Press 'q' to quit", 
-                    (10, 60), 
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1,
-                    (0, 255, 0),
-                    2)
-
-        # Show frame
-        cv2.imshow("Capture Photos", display_frame)
-
-        # Check for quit
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    # Cleanup
-    cap.release()
-    cv2.destroyAllWindows()
-
-    # Return success if we got at least one photo
-    return photos_taken > 0
+    # Only retain complete enrollment sessions
+    return photos_taken == num_photos
 
 if __name__ == "__main__":
     # Test the module

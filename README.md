@@ -1,19 +1,51 @@
-# Face Recognition Attendance System
+<p align="center">
+  <img src="docs/banner.svg" alt="Face Recognition Attendance System" width="100%">
+</p>
 
-A Python desktop project for enrolling students from a webcam and recording attendance with OpenCV's LBPH recognizer. Includes a Tkinter interface, administrator and teacher accounts, daily CSV records, and Excel export.
+<p align="center">
+  <strong>A desktop attendance application built with Python and OpenCV.</strong><br>
+  Student enrollment, webcam recognition and daily reports in one interface.
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="docs/SETUP.md">Full setup guide</a> ·
+  <a href="#project-structure">Project structure</a>
+</p>
+
+---
+
+## Overview
+
+This project brings student enrollment and face-based attendance into a desktop workflow. Administrators manage teacher accounts; teachers capture student photos, run webcam recognition, and review or export attendance records.
+
+**Built by [Mohan](https://github.com/Mohan-4086)** · Python desktop project · [Apache 2.0 license](LICENSE)
 
 ## Features
 
-- First-run administrator setup and salted PBKDF2 password hashing.
-- Administrator tools to add teachers, reset passwords and manage accounts.
-- Student enrollment with full names and explicit teacher ownership.
-- Webcam face detection with Haar cascades and LBPH recognition.
-- One attendance record per student, teacher and day, including after restarting recognition.
-- Date-based attendance viewer and Excel export.
+| Feature | What it does |
+| --- | --- |
+| **Account management** | Administrator setup, teacher accounts and password management |
+| **Student enrollment** | Webcam photo capture with full names and teacher ownership |
+| **Face recognition** | Haar cascade detection and OpenCV LBPH recognition |
+| **Attendance tracking** | Daily CSV records with duplicate prevention |
+| **Student management** | Browse and remove enrolled students |
+| **Reports & export** | View attendance by date and export to Excel |
 
-## Setup
+## Technology
 
-Use Python **3.11** with Tkinter, a desktop display and a working webcam. Python's Windows installer normally includes Tkinter. Linux may require your distribution's `python3-tk` package. Other Python versions and operating systems have not been validated here.
+| Layer | Tools |
+| --- | --- |
+| Application | Python |
+| Desktop interface | Tkinter, Pillow |
+| Computer vision | OpenCV contrib, NumPy |
+| Reports | pandas, openpyxl |
+| Local storage | JSON, CSV and student images |
+
+## Quick start
+
+You need Python with Tkinter, a desktop display and a webcam. See the [full setup guide](docs/SETUP.md) for environment activation and troubleshooting.
 
 ```sh
 git clone --depth 1 https://github.com/Mohan-4086/Advanace_face_recigniton_system.git
@@ -21,71 +53,59 @@ cd Advanace_face_recigniton_system
 python -m venv .venv
 ```
 
-Activate the environment on Windows PowerShell:
+Activate the environment:
 
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-Or on macOS/Linux:
-
-```sh
-source .venv/bin/activate
-```
-
-Install and launch:
+| System | Command |
+| --- | --- |
+| Windows PowerShell | `.venv\Scripts\Activate.ps1` |
+| macOS / Linux | `source .venv/bin/activate` |
 
 ```sh
-python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python src/login.py
 ```
 
-Install into a fresh environment. The application needs **opencv-contrib-python** for `cv2.face`; do not install multiple OpenCV variants together. Neither dlib nor the `face_recognition` package is used.
+At first launch, choose a password for the **admin** account. Use the admin panel to create teacher accounts.
 
-## First use
+## Using the application
 
-1. Choose your own administrator password at the first-run prompt. The username is `admin`; there are no default passwords.
-2. Sign in and use **Add New Teacher** to create an account.
-3. Log out and sign in as that teacher.
-4. Select **Add Student**, enter the full name and capture the requested photos with only one person in view.
-5. Select **Start Recognition**. Press **q** to stop the camera session.
-6. Open **Show Attendance** to view or export daily records.
+1. **Sign in** — create teacher accounts from the admin panel.
+2. **Enroll students** — enter each student's full name and capture photos.
+3. **Start recognition** — keep the face visible and press **q** to stop.
+4. **Review attendance** — select a date, inspect records and export to Excel.
 
-Use varied poses and good lighting during enrollment. Enrollment is cancelled if the requested number of photos is not captured. Each teacher recognizes and manages their own enrolled students. The administrator's attendance dashboard uses its own account scope.
+## Project structure
 
-## Project layout
-
-| Path | Purpose |
+| Location | Contents |
 | --- | --- |
-| `src/login.py` | Login, first-run setup and administrator tools |
-| `src/main.py` | Attendance dashboard |
-| `src/student.py`, `src/student_metadata.py` | Enrollment and student identity |
-| `src/manage_students.py` | Student listing and deletion |
-| `src/face_utils.py` | Training and webcam recognition |
-| `src/attendance.py` | Daily records, viewer and export |
-| `src/auth.py` | Password hashing and verification |
-| `src/config.py` | Portable paths and settings |
-| `src/assets/` | Existing interface images |
+| `src/` | Application code |
+| `src/assets/` | Interface images |
+| `docs/` | Setup guide and README banner |
 | `tests/` | Automated regression tests |
+| `requirements.txt` | Python dependencies |
+| `.gitignore` | Rules excluding local and generated files |
 
-The app creates local `dataset/`, `attendance/`, `logs/` and `users.json` as needed. These are ignored by Git. The repository intentionally includes no enrolled faces or live accounts. Legacy root-level plaintext passwords are upgraded on login startup. Old student folders without `student.json` retain their full folder names but have unknown ownership; re-enroll those students under the correct teacher. Back up local data before switching to the cleanup branch.
+Accounts, enrolled photos and attendance records are created locally and excluded from commits.
 
-## Testing and limitations
+## Validation
+
+Regression tests and Python compilation pass. Dependency installation, module imports, cascade loading, synthetic LBPH training/prediction and an Excel write/read check have also passed on Python 3.12.
 
 ```sh
 python -m unittest discover -s tests -v
-python -m compileall -q src tests
 ```
 
-Automated tests cover password verification, student metadata and attendance recording without a webcam. Camera accuracy, lighting, real GUI interactions and Excel export still need a desktop smoke test. No recognition accuracy percentage is claimed. The threshold is a heuristic and LBPH distance is not a probability.
+Live webcam accuracy and visual GUI behavior still need desktop testing. This is an educational prototype; no recognition accuracy percentage or liveness detection is claimed.
 
-Camera operations run on the UI thread to avoid unsafe Tkinter calls from background threads; dashboard interaction pauses while a camera session runs. This is a local educational prototype, with no liveness detection or protection against someone who can directly edit local files. It is not ready for high-stakes identity verification.
+<details>
+<summary><strong>Existing users: data and migration notes</strong></summary>
 
-## Data and repository cleanup
+Back up local data before pulling the cleanup changes. Existing student folders without metadata need re-enrollment under the correct teacher. Previously committed data remains in earlier Git history.
 
-Face photos, account records, attendance exports, virtual environments, caches and bundled wheels must stay out of commits. Removing previously tracked files in this branch does **not** erase earlier Git history, existing clones or copies. A history rewrite is a separate coordinated operation. A shallow clone avoids downloading the old history after these changes are merged.
+See the [setup and limitations guide](docs/SETUP.md) for details.
 
-## License
+</details>
 
-[Apache License 2.0](LICENSE). Uses OpenCV, NumPy, pandas, Pillow, openpyxl and Python/Tkinter.
+## License & acknowledgments
+
+Released under the [Apache License 2.0](LICENSE). Built using Python, OpenCV, NumPy, Tkinter, Pillow, pandas and openpyxl.

@@ -1,7 +1,8 @@
+# Modified: repository cleanup and reliability fixes, September 2026.
 import os
 import datetime
-import sys
-import subprocess
+import csv
+import threading
 import pandas as pd
 from tkinter import messagebox, Toplevel, ttk, filedialog
 import tkinter as tk
@@ -16,20 +17,33 @@ def get_attendance_file(date=None):
         date = datetime.datetime.now().strftime("%Y-%m-%d")
     return os.path.join(ATTENDANCE_DIR, f"attendance_{date}.csv")
 
-def mark_attendance(name, teacher=None):
-    """Mark attendance with teacher information"""
-    date = datetime.datetime.now().strftime("%Y-%m-%d")
-    file_path = get_attendance_file(date)
-    
-    # Create header if file doesn't exist
-    if not os.path.exists(file_path):
-        with open(file_path, "w") as f:
-            f.write("Name,Time,Teacher,Status\n")
-    
-    # Add attendance entry
-    now = datetime.datetime.now()
-    with open(file_path, "a") as f:
-        f.write(f"{name},{now.strftime('%H:%M:%S')},{teacher or 'Unknown'},Present\n")
+_write_lock = threading.Lock()
+
+
+def mark_attendance(name, teacher=None, student_id=None):
+    """Write once per student and teacher per day, including across restarts."""
+    file_path = get_attendance_file()
+    teacher = teacher or "Unknown"
+    student_id = student_id or name
+    with _write_lock:
+        exists = os.path.exists(file_path) and os.path.getsize(file_path) > 0
+        fields = ["Name", "Time", "Teacher", "Status", "StudentID"]
+        if exists:
+            with open(file_path, newline="", encoding="utf-8") as file:
+                reader = csv.DictReader(file)
+                fields = reader.fieldnames
+                for row in reader:
+                    identity = row.get("StudentID") or row["Name"]
+                    wanted = student_id if "StudentID" in fields else name
+                    if identity == wanted and row["Teacher"] == teacher:
+                        return False
+        with open(file_path, "a", newline="", encoding="utf-8") as file:
+            writer = csv.DictWriter(file, fieldnames=fields, extrasaction="ignore")
+            if not exists:
+                writer.writeheader()
+            writer.writerow({"Name": name, "Time": datetime.datetime.now().strftime("%H:%M:%S"),
+                             "Teacher": teacher, "Status": "Present", "StudentID": student_id})
+        return True
 
 class AttendanceViewer:
     def __init__(self, parent, teacher=None):
@@ -69,7 +83,7 @@ class AttendanceViewer:
         dates.sort(reverse=True)  # Most recent first
 
         self.date_var = tk.StringVar(value=datetime.datetime.now().strftime("%Y-%m-%d"))
-        date_combo = ttk.Combobox(control_frame, textvariable=self.date_var, values=dates)
+        date_combo = ttk.Combobox(control_frame, textvariable=self.date_var, values=dates, state="readonly")
         date_combo.pack(side='left', padx=5)
         date_combo.bind('<<ComboboxSelected>>', self.load_attendance)
 
@@ -121,7 +135,7 @@ class AttendanceViewer:
             return
 
         try:
-            df = pd.read_csv(file_path)
+            df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
             
             # Filter by teacher if specified
             if self.teacher:
@@ -132,7 +146,7 @@ class AttendanceViewer:
 
             # Add to treeview
             for _, row in df.iterrows():
-                self.tree.insert("", "end", values=tuple(row))
+                self.tree.insert("", "end", values=tuple(row[c] for c in ("Name", "Time", "Teacher", "Status")))
 
             # Alternate row colors
             for i, item in enumerate(self.tree.get_children()):
@@ -152,7 +166,7 @@ class AttendanceViewer:
 
         # Calculate statistics
         total_students = len(df)
-        unique_students = len(df['Name'].unique())
+        unique_students = df['StudentID' if 'StudentID' in df else 'Name'].nunique()
         teachers = df['Teacher'].unique()
 
         # Display statistics
@@ -180,7 +194,7 @@ class AttendanceViewer:
             return
 
         try:
-            df = pd.read_csv(file_path)
+            df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
             if self.teacher:
                 df = df[df['Teacher'] == self.teacher]
 

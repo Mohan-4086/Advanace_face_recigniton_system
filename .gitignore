@@ -1,0 +1,18 @@
+# Environments and generated files
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.whl
+.pytest_cache/
+# Local accounts, face images and attendance
+users.json
+src/users.json
+/dataset/
+/attendance/
+/data/
+/logs/
+attendance.csv
+src/attendance.csv
+*.xlsx
+.env

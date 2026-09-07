@@ -1,3 +1,4 @@
+# Modified: repository cleanup and reliability fixes, September 2026.
 import tkinter as tk
 from tkinter import ttk, messagebox
 import os
@@ -5,6 +6,7 @@ import shutil
 from datetime import datetime
 
 from config import DATASET_DIR
+from student_metadata import read_student
 
 def refresh_table(tree, teacher=None):
     # Clear table
@@ -17,11 +19,12 @@ def refresh_table(tree, teacher=None):
     students = []
     for student in os.listdir(DATASET_DIR):
         # Parse student directory name
-        parts = student.split('_')
-        name = parts[0]
-        student_teacher = parts[1] if len(parts) > 1 else 'Unknown'
-        date_added = ' '.join(parts[2:]) if len(parts) > 2 else 'Unknown'
-        
+        folder = os.path.join(DATASET_DIR, student)
+        if not os.path.isdir(folder):
+            continue
+        info = read_student(folder)
+        name, student_teacher, date_added = info["name"], info["teacher"], info["created"]
+
         # If teacher is specified, only show their students
         if teacher and student_teacher != teacher:
             continue
@@ -32,16 +35,16 @@ def refresh_table(tree, teacher=None):
     students.sort(key=lambda x: x[0])
 
     for i, (name, student_teacher, date_added, full_name) in enumerate(students, start=1):
-        tree.insert("", "end", values=(i, name, student_teacher, date_added), tags=(full_name,))
+        tree.insert("", "end", values=(i, name, student_teacher, date_added), iid=full_name, tags=("evenrow" if i % 2 == 0 else "oddrow",))
 
-def delete_student(tree, parent=None):
+def delete_student(tree, parent=None, teacher=None):
     selected = tree.selection()
     if not selected:
         messagebox.showwarning("Warning", "Please select a student to delete.", parent=parent)
         return
 
-    # Get full directory name from tags
-    full_name = tree.item(selected[0], "tags")[0]
+    # Keep the directory identity separate from presentation tags
+    full_name = selected[0]
     student_name = tree.item(selected[0], "values")[1]
     
     confirm = messagebox.askyesno("Confirm", 
@@ -54,7 +57,7 @@ def delete_student(tree, parent=None):
             messagebox.showinfo("Deleted", 
                               f"Student '{student_name}' removed successfully.", 
                               parent=parent)
-            refresh_table(tree)
+            refresh_table(tree, teacher)
         except Exception as e:
             messagebox.showerror("Error", 
                                f"Could not delete student: {e}", 
@@ -131,7 +134,7 @@ def manage_students(parent=None, teacher=None):
     ttk.Button(btn_frame, 
               text="❌ Delete Selected", 
               style="Action.TButton",
-              command=lambda: delete_student(tree, win)).pack(side="left", padx=10)
+              command=lambda: delete_student(tree, win, teacher)).pack(side="left", padx=10)
 
     # Load initial data
     refresh_table(tree, teacher)
@@ -155,7 +158,7 @@ def manage_students(parent=None, teacher=None):
     # Update initial row colors
     alternate_row_colors()
 
-    win.mainloop()
+
 
 if __name__ == "__main__":
     manage_students()
